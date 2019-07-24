@@ -1,0 +1,2 @@
+<?
+require 'system.php';
