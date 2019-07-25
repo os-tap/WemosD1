@@ -29,13 +29,7 @@ var sensors = {
 var chartParams = {
     type: 'line',
     data: {
-        datasets: [{
-            label: 'Температура',
-            data: [],
-            // backgroundColor: 'transparent',
-            borderColor: 'red',
-
-        }, ]
+        datasets: [{}]
     },
     options: {
         title: {
@@ -44,16 +38,11 @@ var chartParams = {
         },
         scales: {
             xAxes: [{
-                scaleLabel: {
-                    // display: true,
-                    labelString: 'Время'
-                },
 
                 type: 'time',
-                // distribution: 'series',
+                distribution: 'series',
                 time: {
-                    // parser: 'YYYY-MM-DD HH:mm:ss',
-                    unit: 'hour',
+                    unit: 'minute',
                     displayFormats: {
                         day: 'DD.MM.YYYY h:mm:ss'
                     },
@@ -65,10 +54,6 @@ var chartParams = {
             }],
 
             yAxes: [{
-                scaleLabel: {
-                    // display: true,
-                    labelString: 'Температура, С'
-                },
                 ticks: {
                     beginAtZero: true
                 }
@@ -79,81 +64,82 @@ var chartParams = {
 
 document.addEventListener('DOMContentLoaded', () => {
 
+
     chart = new Chart(document.getElementById("line-chart"), chartParams);
     setChart(sensors['1'], chart, chartParams);
 
+    /* ----- chart select ----- */
     var s_menu = document.getElementById('sensors');
     var s_menu_ch = s_menu.children;
     for (var i = s_menu_ch.length - 1; i >= 0; i--) {
     	s_menu_ch[i].addEventListener('click', (e)=> {
     		e.preventDefault();
-    		console.log(e.target.dataset.sensor);
     		setChart(sensors[e.target.dataset.sensor], chart, chartParams);
     	})
     }
 
-    console.log(JSON.parse('null'));
-
+    /* ----- toggle RealTime ----- */
     var realTime = document.getElementById('realtime');
     var realTime_box = realTime.querySelector('input');
 
     var interval;
     if (realTime_box.checked)
-    	interval = setInterval(()=>{updateChart(chart, chartParams)},2000);
+    	interval = RealTimeInterval();
 
     realTime_box.addEventListener('change', ()=>{
 	    if (!realTime.classList.contains('is-checked'))
-	    	interval = setInterval(()=>{updateChart(chart, chartParams)},2000);
+	    	interval = RealTimeInterval()
 	    else clearInterval(interval);
     });
 
 
-
-
-
 });
+
+function RealTimeInterval() {
+    return setInterval(()=>{updateChart(chart, chartParams)},2000);
+}
 
 
 function setChart(sensor, chart, chartParams) {
+    var dataset = chartParams.data.datasets[0];
+
     var filter = {
         sensor_id: sensor.id
     }
-    chartParams.data.datasets[0].id = sensor.id;
-    chartParams.data.datasets[0].label = sensor.label;
-    chartParams.data.datasets[0].borderColor = sensor.borderColor;
-    chartParams.data.datasets[0].steppedLine = sensor.steppedLine;
 
+    for(let key in sensor) {
+        dataset[key] = sensor[key];
+    }
 
-    xhrGET('/get.php', filter, function(response) {
-        let responseData = [];
-        for (var i = response.length - 1; i >= 0; i--) {
-            responseData.push({
-                x: new Date(response[i][0]),
-                y: response[i][1]
-            });
-        }
-
-        chartParams.data.datasets[0].data = responseData;
+    GetData(filter, (responseData)=>{
+        dataset.data = responseData;
         chart.update();
-        console.log(response);
     });
+
 }
 
 function updateChart(chart, chartParams) {
+    var dataset = chartParams.data.datasets[0];
+
+    var filter = { sensor_id: dataset.id };
+
+    var last_data = dataset.data.length;
+    if (last_data) filter.from_datetime = dataset.data[0].x.DateTime();
+
+    GetData(filter, (responseData)=>{
+        dataset.data = responseData.concat(dataset.data);
+        chart.update();
+    });
+
+}
 
 
-    var filter = {
-        sensor_id: chartParams.data.datasets[0].id,
-    }
 
-    let last_data = chartParams.data.datasets[0].data.length;
-
-    if (last_data)
-    	filter.from_datetime = chartParams.data.datasets[0].data[0].x.DateTime();
+function GetData (filter, cb) {
 
     xhrGET('/get.php', filter, function(response) {
-    	if (!response) return;
-        let responseData = [];
+        if (!response) return;
+        var responseData = [];
         for (var i = response.length - 1; i >= 0; i--) {
             responseData.push({
                 x: new Date(response[i][0]),
@@ -161,8 +147,9 @@ function updateChart(chart, chartParams) {
             });
         }
 
-        chartParams.data.datasets[0].data = responseData.concat(chartParams.data.datasets[0].data);
-        chart.update();
-        console.log(response);
+        if (typeof cb === 'function')
+            cb(responseData);
+
     });
+
 }

@@ -1,5 +1,5 @@
 
-Date.prototype.DateTime = function(div = '-') {
+Date.prototype.DateTime = function() {
 
     var date = [
         this.getFullYear(),
